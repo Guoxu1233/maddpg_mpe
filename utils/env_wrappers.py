@@ -112,7 +112,13 @@ class DummyVecEnv(VecEnv):
 
     def step_wait(self):
         results = [env.step(a) for (a,env) in zip(self.actions, self.envs)]
-        obs, rews, dones, infos = map(np.array, zip(*results))
+        obs, rews, dones, infos =  zip(*results)
+
+        obs = np.array(obs, dtype=object)
+        rews = np.array(rews)
+        dones = np.array(dones)
+        infos = np.array(infos, dtype=object)
+
         self.ts += 1
         for (i, done) in enumerate(dones):
             if all(done): 
@@ -121,9 +127,11 @@ class DummyVecEnv(VecEnv):
         self.actions = None
         return np.array(obs), np.array(rews), np.array(dones), infos
 
-    def reset(self):        
+    def reset(self):
+
         results = [env.reset() for env in self.envs]
-        return np.array(results)
+        #print('this is results',results)
+        return results
 
     def close(self):
         return

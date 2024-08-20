@@ -4,14 +4,14 @@ from torch.optim import Adam
 from .networks import MLPNetwork
 from .misc import hard_update, gumbel_softmax, onehot_from_logits
 from .noise import OUNoise
-
+import torch
 class DDPGAgent(object):
     """
     General class for DDPG agents (policy, critic, target policy, target
     critic, exploration noise)
     """
     def __init__(self, num_in_pol, num_out_pol, num_in_critic, hidden_dim=64,
-                 lr=0.01, discrete_action=True):
+                 lr=0.01, discrete_action=True, stationary = False):
         """
         Inputs:
             num_in_pol (int): number of dimensions for policy input
@@ -41,6 +41,7 @@ class DDPGAgent(object):
         else:
             self.exploration = 0.3  # epsilon for eps-greedy
         self.discrete_action = discrete_action
+        self.stationary = stationary
 
     def reset_noise(self):
         if not self.discrete_action:
@@ -61,17 +62,26 @@ class DDPGAgent(object):
         Outputs:
             action (PyTorch Variable): Actions for this agent
         """
-        action = self.policy(obs)
-        if self.discrete_action:
-            if explore:
-                action = gumbel_softmax(action, hard=True)
+        if self.stationary:
+            if self.discrete_action:
+                action = torch.zeros(1,dtype=torch.long)
             else:
-                action = onehot_from_logits(action)
-        else:  # continuous action
-            if explore:
-                action += Variable(Tensor(self.exploration.noise()),
-                                   requires_grad=False)
-            action = action.clamp(-1, 1)
+                action = torch.zeros(2)
+        else:
+            action = self.policy(obs)
+
+            if self.discrete_action:
+                if explore:
+                    action = gumbel_softmax(action, hard=True)
+                else:
+                    action = onehot_from_logits(action)
+            else:  # continuous action
+                if explore:
+                    # action += Variable(Tensor(self.exploration.noise()),
+                    #                    requires_grad=False)
+                    action += torch.tensor(self.exploration.noise(), dtype=torch.float, requires_grad=False)
+                    #print('this is DDPG action',action)
+                action = action.clamp(-1, 1)
         return action
 
     def get_params(self):
@@ -85,6 +95,7 @@ class DDPGAgent(object):
     def load_params(self, params):
         self.policy.load_state_dict(params['policy'])
         self.critic.load_state_dict(params['critic'])
+        #print(params['critic'])
         self.target_policy.load_state_dict(params['target_policy'])
         self.target_critic.load_state_dict(params['target_critic'])
         self.policy_optimizer.load_state_dict(params['policy_optimizer'])

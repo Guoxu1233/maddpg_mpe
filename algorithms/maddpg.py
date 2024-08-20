@@ -33,8 +33,8 @@ class MADDPG(object):
         self.alg_types = alg_types
         self.agents = [DDPGAgent(lr=lr, discrete_action=discrete_action,
                                  hidden_dim=hidden_dim,
-                                 **params)
-                       for params in agent_init_params]
+                                 **params, stationary = (i == 3) )
+                       for i,params in enumerate(agent_init_params)]
         self.agent_init_params = agent_init_params
         self.gamma = gamma
         self.tau = tau
@@ -103,7 +103,7 @@ class MADDPG(object):
             else:
                 all_trgt_acs = [pi(nobs) for pi, nobs in zip(self.target_policies,
                                                              next_obs)]
-            trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)
+            trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)#四个物体的next_obs和action
         else:  # DDPG
             if self.discrete_action:
                 trgt_vf_in = torch.cat((next_obs[agent_i],
@@ -225,6 +225,7 @@ class MADDPG(object):
         Save trained parameters of all agents into one file
         """
         self.prep_training(device='cpu')  # move parameters to CPU before saving
+
         save_dict = {'init_dict': self.init_dict,
                      'agent_params': [a.get_params() for a in self.agents]}
         torch.save(save_dict, filename)
@@ -274,6 +275,15 @@ class MADDPG(object):
         Instantiate instance of this class from file created by 'save' method
         """
         save_dict = torch.load(filename)
+
+        '''
+        save_dict['init_dict']
+        
+        {'gamma': 0.95, 'tau': 0.01, 'lr': 0.01, 'hidden_dim': 64, 'alg_types': ['MADDPG', 'MADDPG', 'MADDPG', 'MADDPG'], 
+        'agent_init_params': [{'num_in_pol': 16, 'num_out_pol': 2, 'num_in_critic': 70}, {'num_in_pol': 16, 'num_out_pol': 2, 'num_in_critic': 70}, {'num_in_pol': 16, 'num_out_pol': 2, 'num_in_critic': 70}, {'num_in_pol': 14, 'num_out_pol': 2, 'num_in_critic': 70}]
+        'discrete_action': False}
+        
+        '''
         instance = cls(**save_dict['init_dict'])
         instance.init_dict = save_dict['init_dict']
         for a, params in zip(instance.agents, save_dict['agent_params']):
