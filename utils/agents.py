@@ -85,6 +85,7 @@ class DDPGAgent(object):
     def load_params(self, params):
         self.policy.load_state_dict(params['policy'])
         self.critic.load_state_dict(params['critic'])
+        #print(params['critic'])
         self.target_policy.load_state_dict(params['target_policy'])
         self.target_critic.load_state_dict(params['target_critic'])
         self.policy_optimizer.load_state_dict(params['policy_optimizer'])

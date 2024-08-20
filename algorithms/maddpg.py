@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn.functional as F
 from gym.spaces import Box, Discrete
@@ -225,6 +226,7 @@ class MADDPG(object):
         Save trained parameters of all agents into one file
         """
         self.prep_training(device='cpu')  # move parameters to CPU before saving
+
         save_dict = {'init_dict': self.init_dict,
                      'agent_params': [a.get_params() for a in self.agents]}
         torch.save(save_dict, filename)
@@ -274,6 +276,15 @@ class MADDPG(object):
         Instantiate instance of this class from file created by 'save' method
         """
         save_dict = torch.load(filename)
+
+        '''
+        save_dict['init_dict']
+        
+        {'gamma': 0.95, 'tau': 0.01, 'lr': 0.01, 'hidden_dim': 64, 'alg_types': ['MADDPG', 'MADDPG', 'MADDPG', 'MADDPG'], 
+        'agent_init_params': [{'num_in_pol': 16, 'num_out_pol': 2, 'num_in_critic': 70}, {'num_in_pol': 16, 'num_out_pol': 2, 'num_in_critic': 70}, {'num_in_pol': 16, 'num_out_pol': 2, 'num_in_critic': 70}, {'num_in_pol': 14, 'num_out_pol': 2, 'num_in_critic': 70}]
+        'discrete_action': False}
+        
+        '''
         instance = cls(**save_dict['init_dict'])
         instance.init_dict = save_dict['init_dict']
         for a, params in zip(instance.agents, save_dict['agent_params']):

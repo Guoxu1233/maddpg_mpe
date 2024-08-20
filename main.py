@@ -6,15 +6,16 @@ import numpy as np
 from gym.spaces import Box, Discrete
 from pathlib import Path
 from torch.autograd import Variable
-from tensorboardX import SummaryWriter
+#from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from utils.make_env import make_env
 from utils.buffer import ReplayBuffer
 from utils.env_wrappers import SubprocVecEnv, DummyVecEnv
 from algorithms.maddpg import MADDPG
 
-USE_CUDA = False  # torch.cuda.is_available()
+USE_CUDA = True  # torch.cuda.is_available()
 
-def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
+def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):#第一个变量就是simple_tag
     def get_env_fn(rank):
         def init_env():
             env = make_env(env_id, discrete_action=discrete_action)
@@ -22,7 +23,7 @@ def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
             np.random.seed(seed + rank * 1000)
             return env
         return init_env
-    if n_rollout_threads == 1:
+    if n_rollout_threads == 1:#默认就是1
         return DummyVecEnv([get_env_fn(0)])
     else:
         return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
@@ -64,8 +65,9 @@ def run(config):
         print("Episodes %i-%i of %i" % (ep_i + 1,
                                         ep_i + 1 + config.n_rollout_threads,
                                         config.n_episodes))
-        obs = env.reset()
-        # obs.shape = (n_rollout_threads, nagent)(nobs), nobs differs per agent so not tensor
+        obs = env.reset()#这里确定了，猎人的obs_dim=16 被捕的obs_dim=14
+        #obs.shape = (n_rollout_threads, nagent)#(nobs), nobs differs per agent so not tensor
+        #print(f'initial obs shape:{np.array(obs).shape}')
         maddpg.prep_rollouts(device='cpu')
 
         explr_pct_remaining = max(0, config.n_exploration_eps - ep_i) / config.n_exploration_eps
@@ -74,9 +76,10 @@ def run(config):
 
         for et_i in range(config.episode_length):
             # rearrange observations to be per agent, and convert to torch Variable
-            torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])),
-                                  requires_grad=False)
-                         for i in range(maddpg.nagents)]
+            #torch_obs = [Variable(torch.Tensor(np.vstack(obs[:, i])),requires_grad=False) for i in range(maddpg.nagents)]
+            torch_obs = [Variable(torch.Tensor(np.vstack([obs[j][i] for j in range(config.n_rollout_threads)])),
+                                  requires_grad=False) for i in range(maddpg.nagents)]
+
             # get actions as torch Variables
             torch_agent_actions = maddpg.step(torch_obs, explore=True)
             # convert actions to numpy arrays
@@ -84,6 +87,7 @@ def run(config):
             # rearrange actions to be per environment
             actions = [[ac[i] for ac in agent_actions] for i in range(config.n_rollout_threads)]
             next_obs, rewards, dones, infos = env.step(actions)
+            obs = np.array(obs, dtype=object)
             replay_buffer.push(obs, agent_actions, rewards, next_obs, dones)
             obs = next_obs
             t += config.n_rollout_threads
@@ -118,8 +122,9 @@ def run(config):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("env_id", help="Name of environment")
-    parser.add_argument("model_name",
+    parser.add_argument("--env_id",default='simple_tag', help="Name of environment")
+    parser.add_argument("--model_name",
+                        default= 'test_pc',
                         help="Name of directory to store " +
                              "model/training contents")
     parser.add_argument("--seed",
@@ -128,8 +133,8 @@ if __name__ == '__main__':
     parser.add_argument("--n_rollout_threads", default=1, type=int)
     parser.add_argument("--n_training_threads", default=6, type=int)
     parser.add_argument("--buffer_length", default=int(1e6), type=int)
-    parser.add_argument("--n_episodes", default=25000, type=int)
-    parser.add_argument("--episode_length", default=25, type=int)
+    parser.add_argument("--n_episodes", default=10000, type=int)#25000
+    parser.add_argument("--episode_length", default=40, type=int)#25
     parser.add_argument("--steps_per_update", default=100, type=int)
     parser.add_argument("--batch_size",
                         default=1024, type=int,
